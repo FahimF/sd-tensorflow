@@ -1,16 +1,18 @@
-import numpy as np
-from tqdm import tqdm
 import math
+import random
+import sys
 
+import numpy as np
 import tensorflow as tf
+from PIL import Image
 from tensorflow import keras
+from tqdm import tqdm
 
 from .autoencoder_kl import Decoder, Encoder
-from .diffusion_model import UNetModel
 from .clip_encoder import CLIPTextTransformer
 from .clip_tokenizer import SimpleTokenizer
 from .constants import _UNCONDITIONAL_TOKENS, _ALPHAS_CUMPROD
-from PIL import Image
+from .diffusion_model import UNetModel
 
 MAX_TEXT_LEN = 77
 
@@ -49,6 +51,8 @@ class StableDiffusion:
         input_mask=None,
         input_image_strength=0.5,
     ):
+        if seed is None:
+            seed = random.randint(1000, sys.maxsize)
         # Tokenize prompt (i.e. starting context)
         inputs = self.tokenizer.encode(prompt)
         assert len(inputs) < 77, "Prompt is too long (should be < 77 tokens)"
@@ -91,10 +95,7 @@ class StableDiffusion:
         )
         timesteps = np.arange(1, 1000, 1000 // num_steps)
         input_img_noise_t = timesteps[ int(len(timesteps)*input_image_strength) ]
-        latent, alphas, alphas_prev = self.get_starting_parameters(
-            timesteps, batch_size, seed , input_image=input_image_tensor, input_img_noise_t=input_img_noise_t
-        )
-
+        latent, alphas, alphas_prev = self.get_starting_parameters(timesteps, batch_size, seed , input_image=input_image_tensor, input_img_noise_t=input_img_noise_t)
         if input_image is not None:
             timesteps = timesteps[: int(len(timesteps)*input_image_strength)]
 
@@ -102,25 +103,15 @@ class StableDiffusion:
         progbar = tqdm(list(enumerate(timesteps))[::-1])
         for index, timestep in progbar:
             progbar.set_description(f"{index:3d} {timestep:3d}")
-            e_t = self.get_model_output(
-                latent,
-                timestep,
-                context,
-                unconditional_context,
-                unconditional_guidance_scale,
-                batch_size,
-            )
+            e_t = self.get_model_output(latent, timestep, context, unconditional_context, unconditional_guidance_scale,
+                batch_size)
             a_t, a_prev = alphas[index], alphas_prev[index]
-            latent, pred_x0 = self.get_x_prev_and_pred_x0(
-                latent, e_t, index, a_t, a_prev, temperature, seed
-            )
+            latent, pred_x0 = self.get_x_prev_and_pred_x0(latent, e_t, index, a_t, a_prev, temperature, seed)
 
             if input_mask is not None and input_image is not None:
                 # If mask is provided, noise at current timestep will be added to input image.
                 # The intermediate latent will be merged with input latent.
-                latent_orgin, alphas, alphas_prev = self.get_starting_parameters(
-                    timesteps, batch_size, seed , input_image=input_image_tensor, input_img_noise_t=timestep
-                )
+                latent_orgin, alphas, alphas_prev = self.get_starting_parameters(timesteps, batch_size, seed , input_image=input_image_tensor, input_img_noise_t=timestep)
                 latent = latent_orgin * latent_mask_tensor + latent * (1- latent_mask_tensor)
 
         # Decoding stage
@@ -131,7 +122,7 @@ class StableDiffusion:
           # Merge inpainting output with original image
           decoded = input_image_array * (1-input_mask_array) + np.array(decoded) * input_mask_array
 
-        return np.clip(decoded, 0, 255).astype("uint8")
+        return seed, np.clip(decoded, 0, 255).astype("uint8")
 
     def timestep_embedding(self, timesteps, dim=320, max_period=10000):
         half = dim // 2
