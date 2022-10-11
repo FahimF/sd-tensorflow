@@ -1,6 +1,5 @@
 import math
 import random
-import sys
 
 import numpy as np
 import tensorflow as tf
@@ -15,7 +14,6 @@ from .constants import _UNCONDITIONAL_TOKENS, _ALPHAS_CUMPROD
 from .diffusion_model import UNetModel
 
 MAX_TEXT_LEN = 77
-
 
 class StableDiffusion:
     def __init__(self, img_height=1000, img_width=1000, jit_compile=False, download_weights=True):
@@ -39,7 +37,7 @@ class StableDiffusion:
     def generate(self, prompt, batch_size=1, num_steps=25, unconditional_guidance_scale=7.5, temperature=1, seed=None,
         input_image=None, input_mask=None, input_image_strength=0.5):
         if seed is None:
-            seed = random.randint(1000, sys.maxsize)
+            seed = random.randrange(0, np.iinfo(np.uint32).max)
         # Tokenize prompt (i.e. starting context)
         inputs = self.tokenizer.encode(prompt)
         assert len(inputs) < 77, "Prompt is too long (should be < 77 tokens)"

@@ -92,14 +92,16 @@ def save_image_and_prompt_to_png(image):
 	fn = f'{str}_{seed}.png'
 	path = os.path.join(outdir, fn)
 	ndx = 1
-	while exists(fn):
+	while exists(path):
 		fn = f'{str}_{seed}_{ndx}.png'
+		path = os.path.join(outdir, fn)
 		ndx += 1
 	info = PngImagePlugin.PngInfo()
 	meta = f'{get_info_string()} -S{seed}'
-	info.add_text('SDInfo', meta)
+	info.add_text('Software', meta)
 	info.add_text('Title', args.prompt)
 	info.add_text('Seed', f'{seed}')
+	print(f'Save file: {path}')
 	image.save(path, 'PNG', pnginfo=info)
 	return path
 
