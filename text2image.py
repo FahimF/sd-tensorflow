@@ -4,7 +4,7 @@ import os
 import time
 
 from datetime import datetime
-from os.path import isdir
+from os.path import isdir, exists
 from PIL import Image, PngImagePlugin
 from tensorflow import keras
 
@@ -89,11 +89,15 @@ def save_image_and_prompt_to_png(image):
 	global args, seed
 
 	str = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-	name = f'{str}_{seed}.png'
-	path = os.path.join(outdir, name)
+	fn = f'{str}_{seed}.png'
+	path = os.path.join(outdir, fn)
+	ndx = 1
+	while exists(fn):
+		fn = f'{str}_{seed}_{ndx}.png'
+		ndx += 1
 	info = PngImagePlugin.PngInfo()
 	meta = f'{get_info_string()} -S{seed}'
-	info.add_text('Author', meta)
+	info.add_text('SDInfo', meta)
 	info.add_text('Title', args.prompt)
 	info.add_text('Seed', f'{seed}')
 	image.save(path, 'PNG', pnginfo=info)
@@ -117,25 +121,25 @@ def get_info_string():
 
 generator = StableDiffusion(img_height=args.height, img_width=args.width, jit_compile=False)
 print(f'The SEED for this batch is: {args.seed}')
-# Run upto number of copies
-for i in range(args.copies):
-	tic = time.time()
-	seed, nd_arr = generator.generate(
-		args.prompt,
-		num_steps=args.steps,
-		unconditional_guidance_scale=args.scale,
-		temperature=1,
-		batch_size=1,
-		seed=args.seed,
-	)
-	dur = time.time() - tic
-	min = int(dur / 60)
-	sec = dur % 60
-	print('>> Image stats:')
-	print(f'>>   image generated in: {min}m', '%4.2fs' % sec)
-	print(f'>>   image prompt: {args.prompt}')
-	print(f'>>   image seed: {seed}')
-	img = Image.fromarray(nd_arr[0])
+tic = time.time()
+seed, nd_arr = generator.generate(
+	args.prompt,
+	num_steps=args.steps,
+	unconditional_guidance_scale=args.scale,
+	temperature=1,
+	batch_size=args.copies,
+	seed=args.seed,
+)
+dur = time.time() - tic
+min = int(dur / 60)
+sec = dur % 60
+print('>> Run stats:')
+print(f'>>   {args.copies} image(s) generated in: {min}m', '%4.2fs' % sec)
+print(f'>>   prompt: {args.prompt}')
+print(f'>>   seed: {seed}')
+# Save images
+for arr in nd_arr:
+	img = Image.fromarray(arr)
 	fn = save_image_and_prompt_to_png(img)
 	os.system(f'open {fn}')
 
